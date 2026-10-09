@@ -60,9 +60,10 @@ tr.hoy td{font-weight:700;background:rgba(196,121,26,.2)}
 table.hj td:first-child,table.hj th:first-child{position:sticky;left:0;background:var(--cd);z-index:1}
 table.hj td{text-align:center}table.hj th{text-align:center;white-space:normal;min-width:84px}
 .sy{font-size:12.5px;font-weight:700;color:var(--mu);text-align:right;margin-bottom:6px}
+.row .chip{padding:9px 14px;font-size:14px}
 details summary{cursor:pointer;padding:6px 0}
 </style></head><body>
-<header><div><div class="eb">Granja · Energía</div><h1>Control de generadores</h1></div><div class="qw"><div id="sy" class="sy"></div><select id="qn" onchange="setQ(this.value)"></select></div></header>
+<header><div><div class="eb">Granja · Energía</div><h1>Control de generadores</h1></div><div class="qw"><div id="sy" class="sy"></div><select id="qn" onchange="setQ(this.value)"></select><button id="adm" class="chip" style="margin-top:8px;padding:8px 14px;font-size:13px;width:100%" onclick="admBtn()"></button></div></header>
 <nav id="nav"></nav>
 <main id="app"></main>
 <div id="mod"></div>
@@ -76,7 +77,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const GENS=[['g1','Generador 1'],['g2','Generador 2'],['g3','Generador 3'],['g4','Generador 4'],['g5','Generador 5'],['g6','Generador 6'],['peq','Generador PEQ']];
 const DEF=['Aceite','Filtro de aceite','Filtro de aire','Filtro de combustible (Doosan)','Combustible','Limpia contactos','Desengrasante','Líquido refrigerante','Waipe'];
-const TABS=[['reg','Registro'],['hoja','Hoja de registro'],['dia','Diario'],['mes','Mensual'],['man','Mantenimiento'],['ene','Energía y diésel'],['aj','Ajustes']];
+const TABS=[['reg','Registro'],['hoja','Hoja de registro'],['dia','Diario'],['mes','Mensual'],['man','Mantenimiento'],['ene','Energía y diésel'],['cor','Correcciones'],['aj','Ajustes']];
 const mk=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 const dk=ts=>{const d=new Date(ts);return mk(d)+'-'+String(d.getDate()).padStart(2,'0')};
 const S={pend:{},mode:'local',lect:[],mant:[],med:[],cfg:{},tab:'reg',mes:mk(new Date()),db:null,quien:'',err:{},ok:'',sel:[],mod:null};
@@ -94,14 +95,14 @@ const daily=g=>spread(L(g),'h');
 function rate(g){const r=L(g);if(r.length<2)return null;const z=r[r.length-1],lim=z.ts-7*864e5;let a=[...r].reverse().find(x=>x.ts<=lim)||r[0];if(a===z)a=r[r.length-2];const dt=(z.ts-a.ts)/864e5;return dt>0?(z.h-a.h)/dt:null}
 function base(g){const m=S.mant.filter(x=>x.gen===g).sort((a,b)=>b.ts-a.ts)[0];if(m)return m.h;const c=cfg().base[g];if(typeof c==='number')return c;const r=L(g);return r.length?r[0].h:null}
 
-function render(){
-  $('#nav').innerHTML=TABS.map(t=>`<button class="${S.tab===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
+function render(){if(S.tab==='cor'&&!S.su)S.tab='reg';updAdm();
+  $('#nav').innerHTML=TABS.filter(t=>t[0]!=='cor'||S.su).map(t=>`<button class="${S.tab===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
   const q=cfg().quienes;$('#qn').innerHTML='<option value="">¿Quién registra?</option>'+q.map(n=>`<option ${n===S.quien?'selected':''}>${esc(n)}</option>`).join('');
   let h=S.fberr?'<div class="c full er">No se pudo conectar con la nube. Los datos se guardan solo en este dispositivo hasta resolverlo.</div>':S.local?'<div class="c full mu">Modo de prueba: los datos se guardan solo en este dispositivo.</div>':'';
   if(S.ok)h+=`<div class="ok">${esc(S.ok)}</div>`;
   if(S.tab!=='aj')h+=vAv();
   if(S.tab==='aj')h+=vAj();else if(!act().length&&!['ene','hoja'].includes(S.tab))h+='<div class="c"><h2>Sin generadores activos</h2><p class="mu">Todos están inhabilitados. Ve a <b>Ajustes</b> y activa los que estén en uso.</p></div>';
-  else h+={reg:vReg,dia:vDia,mes:vMes,man:vMan,ene:vEne,hoja:vHoja}[S.tab]();
+  else h+={reg:vReg,dia:vDia,mes:vMes,man:vMan,ene:vEne,hoja:vHoja,cor:vCor}[S.tab]();
   $('#app').innerHTML=h;
 }
 const go=t=>{S.tab=t;S.ok='';render();scrollTo(0,0)};
@@ -109,7 +110,7 @@ const setQ=v=>{S.quien=v;try{localStorage.setItem('quien',v)}catch(e){}};
 const msg=t=>{S.ok=t;render();setTimeout(()=>{S.ok='';render()},3000)};
 
 function vReg(){return act().map(([g,n])=>{const r=L(g),z=r[r.length-1];
- return `<div class="c"><h2>${n}</h2><div class="mu">${z?`Última lectura: <b>${fh(z.h)}</b> · ${fd(z.ts)}${z.quien?' · '+esc(z.quien):''}`:'Aún sin lecturas'}</div>
+ return `<div class="c"><h2>${n}</h2><div class="mu">${z?`Última lectura: <b>${fh(z.h)}</b> · ${fd(z.ts)}${z.quien?' · '+esc(z.quien):''}${S.su&&z.id&&S.mode!=='claude'?` <button class="chip" style="padding:6px 12px;font-size:13px;margin-left:6px" onclick="edit('lect','${z.id}')">Corregir</button>`:''}`:'Aún sin lecturas'}</div>
  <div class="r"><input id="h_${g}" type="number" inputmode="numeric" placeholder="horas"><b>h</b><input id="m_${g}" type="number" inputmode="numeric" placeholder="min"><b>m</b></div>
  <details><summary class="mu">Cambiar fecha y hora de la lectura</summary><input id="t_${g}" type="datetime-local" value="${nowL()}"></details>
  <div class="er" id="er_${g}">${esc(S.err[g]||'')}</div>
@@ -167,15 +168,23 @@ async function gMan(){const g=S.mod,nota=$('#nt').value.trim(),h=parseFloat($('#
 
 function vAj(){const c=cfg();
  return `<div class="c"><h2>Generadores en uso</h2><div class="mu">Activa solo los que estén operando.</div>${GENS.map(([g,n])=>`<div class="row"><label><b>${n}</b></label><input class="tg" type="checkbox" ${c.activos[g]?'checked':''} onchange="cf(x=>x.activos['${g}']=this.checked)"></div>`).join('')}</div>
- <div class="c"><h2>Punto de partida</h2><div class="mu">Si conoces el horómetro del último mantenimiento, escríbelo en horas. Si lo dejas vacío, se cuenta desde la primera lectura registrada.</div>${GENS.map(([g,n])=>`<div class="row"><label>${n}</label><input style="width:120px" type="number" inputmode="numeric" placeholder="horas" value="${typeof c.base[g]==='number'?Math.round(c.base[g]):''}" onchange="cf(x=>{const v=parseFloat(this.value);if(v>=0)x.base['${g}']=v;else delete x.base['${g}']})"></div>`).join('')}</div>
+ <div class="c"><h2>Punto de partida</h2><div class="mu">Si conoces el horómetro del último mantenimiento, escríbelo en horas. Si lo dejas vacío, se cuenta desde la primera lectura registrada.</div>${GENS.map(([g,n])=>`<div class="row"><label>${n}</label><input style="width:120px" type="number" inputmode="numeric" placeholder="horas" value="${typeof c.base[g]==='number'?Math.round(c.base[g]):''}" onchange="cf(x=>{const v=parseFloat(this.value);if(v>=0)x.base['${g}']=v;else x.base['${g}']=null})"></div>`).join('')}</div>
  <div class="c"><h2>Cada cuántas horas</h2><input type="number" inputmode="numeric" value="${c.ciclo}" onchange="cf(x=>x.ciclo=parseFloat(this.value)||250)"></div>
  <div class="c"><h2>Aviso de mantenimiento</h2><div class="mu">Avisar cuando falten estos días (o menos) para el mantenimiento.</div><input type="number" inputmode="numeric" value="${c.dias}" onchange="cf(x=>x.dias=parseFloat(this.value)||3)"></div>
  <div class="c"><h2>Importar historial</h2><div class="mu">Carga las lecturas de los generadores 1, 5 y 6 del Excel (2 de agosto al 24 de septiembre, tomadas a las 8:00) y activa esos tres generadores. Solo se puede hacer una vez.</div><button id="bimp" class="b s" style="margin-top:10px" onclick="imp()">Cargar historial del Excel</button></div>
+ ${S.su?`<div class="c"><h2>PIN de administrador</h2><div class="mu">Con este PIN se entra a Correcciones. Se cierra solo tras 15 minutos sin usar la app.</div><button class="b s" style="margin-top:10px" onclick="pinModal('new')">Cambiar PIN</button></div>`:''}
+ <div class="c"><h2>Respaldo</h2><div class="mu">Descarga una copia de todos los datos (lecturas, mantenimientos, energía y ajustes). Conviene hacerlo cada semana y guardarla en el computador o en Drive.</div><button class="b s" style="margin-top:10px" onclick="resp()">Descargar respaldo</button><div class="mu" style="margin-top:10px">Versión 1.3 · ${S.mode==='nube'?'conectada a la nube':'sin nube'}</div></div>
  <div class="c"><h2>Unidades</h2>${MED.map(([t,l])=>`<div class="row"><label>${l}</label><input style="width:100px" value="${esc(un(t))}" onchange="cf(x=>{x.un=x.un||{};x.un['${t}']=this.value})"></div>`).join('')}</div>
  ${lst('Trabajos de mantenimiento','items',c.items,'Ej. Filtro de combustible')}${lst('Personas que registran','quienes',c.quienes,'Nombre')}`}
 function lst(t,k,a,p){return `<div class="c"><h2>${t}</h2>${a.map((x,i)=>`<div class="row"><span>${esc(x)}</span><button class="x" onclick="cf(o=>o['${k}'].splice(${i},1))">✕</button></div>`).join('')}<div class="r"><input style="width:100%;font-size:17px;text-align:left" id="n_${k}" placeholder="${p}"><button class="b" style="width:auto" onclick="add('${k}')">＋</button></div></div>`}
 const add=k=>{const v=$('#n_'+k).value.trim();if(v)cf(o=>{if(!o[k].includes(v))o[k].push(v)})};
-async function cf(fn){const c=JSON.parse(JSON.stringify(cfg()));fn(c);S.cfg=c;render();try{await S.db.doc('config/main').set(c)}catch(e){}}
+async function cf(fn){if(!S.cfgLoaded)return msg('Espera un momento a que cargue la conexión e inténtalo de nuevo.');
+ const o=cfg(),c=JSON.parse(JSON.stringify(o));fn(c);S.cfg=c;render();
+ try{if(S.mode==='claude'){await S.db.doc('config/main').set(c);return}
+  const d={},j=JSON.stringify;
+  for(const k of Object.keys(c)){if(j(c[k])===j(o[k]))continue;
+   if(c[k]&&typeof c[k]==='object'&&!Array.isArray(c[k])){d[k]={};for(const t in c[k])if(j(c[k][t])!==j((o[k]||{})[t]))d[k][t]=c[k][t]}else d[k]=c[k]}
+  if(Object.keys(d).length)await S.db.doc('config/main').set(d,true)}catch(e){console.error(e)}}
 
 
 const MED=[['kws','KWS (contador)','kWh'],['dtanque','Diésel salida del tanque (contador)','gal'],['dgen','Diésel ingreso a generadores (contador)','gal'],['dcal','Diésel caldero (consumo del día)','gal']];
@@ -183,7 +192,7 @@ const M=t=>S.med.filter(x=>x.tipo===t).sort((a,b)=>a.ts-b.ts);
 const un=t=>(cfg().un||{})[t]??MED.find(x=>x[0]===t)[2];
 function dailyM(t){if(t==='dcal'){const o={};M(t).forEach(x=>{const k=dk(x.ts);o[k]=(o[k]||0)+x.v});return o}return spread(M(t),'v')}
 function vEne(){const D=MED.map(m=>dailyM(m[0])),[y,m]=S.mes.split('-').map(Number),n=new Date(y,m,0).getDate(),hoy=dk(Date.now());let rows='',T=MED.map(()=>0);
- const form=`<div class="c"><h2>Registrar lectura</h2><div class="mu">Escribe solo lo que vayas a anotar; lo que dejes vacío se omite.</div>${MED.map(([t,l])=>{const z=M(t).pop();return `<div style="margin-top:12px"><b>${l}</b><div class="mu">${t==='dcal'?'Escribe el consumo del día':(z?'Última lectura: '+z.v.toLocaleString('es',{maximumFractionDigits:2}):'Sin lecturas')}</div><input id="e_${t}" type="number" inputmode="decimal" step="any" placeholder="${esc(un(t))}"></div>`}).join('')}<details><summary class="mu" style="margin-top:10px">Cambiar fecha y hora</summary><input id="e_t" type="datetime-local" value="${nowL()}"></details><div class="er" id="ee"></div><button class="b" style="margin-top:10px" onclick="gEne()">Guardar</button></div>`;
+ const form=`<div class="c"><h2>Registrar lectura</h2><div class="mu">Escribe solo lo que vayas a anotar; lo que dejes vacío se omite.</div>${MED.map(([t,l])=>{const z=M(t).pop();return `<div style="margin-top:12px"><b>${l}</b><div class="mu">${t==='dcal'?'Escribe el consumo del día':(z?'Última lectura: '+z.v.toLocaleString('es',{maximumFractionDigits:2}):'Sin lecturas')}</div><input id="e_${t}" type="number" inputmode="decimal" step="any" placeholder="${esc(un(t))}"></div>`}).join('')}<details><summary class="mu" style="margin-top:10px">Cambiar fecha y hora</summary><input id="e_t" type="datetime-local" value="${nowL()}"></details><div class="er" id="ee"></div><button class="b" style="margin-top:10px" onclick="gEne()">Guardar</button>${S.su?`<button class="chip" style="margin-top:10px" onclick="S.ct='med';go('cor')">¿Te equivocaste? Corregir un registro</button>`:'<div class="mu" style="margin-top:10px">¿Te equivocaste? Avisa al administrador para corregirlo.</div>'}</div>`;
  for(let d=1;d<=n;d++){const k=S.mes+'-'+String(d).padStart(2,'0');rows+=`<tr class="${k===hoy?'hoy':''}"><td>${String(d).padStart(2,'0')}</td>${D.map((o,i)=>{if(o[k]==null)return '<td>–</td>';T[i]+=o[k];return `<td>${o[k].toLocaleString('es',{maximumFractionDigits:i?1:0})}</td>`}).join('')}</tr>`}
  return form+`<div class="c">${mesNav()}<div class="mu">Consumo por día (diferencia entre lecturas, repartida según el tiempo transcurrido).</div><div class="sc"><table><tr><th>Día</th><th>KWS ${esc(un('kws'))}</th><th>Tanque ${esc(un('dtanque'))}</th><th>Gener. ${esc(un('dgen'))}</th><th>Caldero ${esc(un('dcal'))}</th></tr>${rows}<tr><td><b>Mes</b></td>${T.map((t,i)=>`<td><b>${t.toLocaleString('es',{maximumFractionDigits:i?1:0})}</b></td>`).join('')}</tr></table></div></div>`}
 async function gEne(){const ts=$('#e_t')&&$('#e_t').value?new Date($('#e_t').value).getTime():Date.now(),E=t=>{const d=$('#ee');if(d)d.textContent=t},add=[];
@@ -227,7 +236,7 @@ function vHist(){const c=cfg(),cy=c.ciclo||250,nm=S.mant.filter(x=>cfg().activos
    else pr='<div class="mu" style="margin:6px 0 10px">Se necesitan al menos dos lecturas para proyectar.</div>'}
   const rows=ms.map((m,i)=>{const pv=i?ms[i-1].h:(typeof c.base[g]==='number'?c.base[g]:null),iv=pv==null?null:m.h-pv,
    st=iv==null?'<span class="mu">Primer registro en la app (sin mantenimiento previo anotado)</span>':iv>cy?`<b style="color:var(--er)">Se pasó ${(iv-cy).toFixed(0)} h del límite</b> · ${iv.toFixed(0)} h de trabajo`:`<b style="color:var(--ok)">A tiempo</b> · ${iv.toFixed(0)} h de trabajo (${(cy-iv).toFixed(0)} h antes del límite)`;
-   return `<div class="row" style="align-items:flex-start"><div><b>${fdy(m.ts)}</b><div>Realizó: ${m.quien?esc(m.quien):'<span class="mu">sin registrar</span>'}</div><div>${esc((m.items||[]).join(', '))||'—'}${m.nota?' · '+esc(m.nota):''}</div><div class="mu">Horómetro: ${fh(m.h)}</div><div>${st}</div></div></div>`}).reverse().join('');
+   return `<div class="row" style="align-items:flex-start"><div><b>${fdy(m.ts)}</b><div>Realizó: ${m.quien?esc(m.quien):'<span class="mu">sin registrar</span>'}</div><div>${esc((m.items||[]).join(', '))||'—'}${m.nota?' · '+esc(m.nota):''}</div><div class="mu">Horómetro: ${fh(m.h)}</div><div>${st}</div>${S.su&&m.id&&S.mode!=='claude'?`<button class="chip" style="padding:6px 12px;font-size:13px;margin-top:6px" onclick="edit('mant','${m.id}')">Editar</button>`:''}</div></div>`}).reverse().join('');
   return `<div class="c full"><h2>Historial · ${n}</h2><div class="mu">${ms.length} mantenimiento${ms.length>1?'s':''} registrado${ms.length>1?'s':''}</div>${pr}${rows}</div>`}).join('')}
 
 const IMP={"g1": [11496.57, 11506.15, 11529.5, 11554.12, 11562.36, 11586.4, 11610.39, 11632.1, 11655.53, 11663.12, 11685.56, 11709.42, 11718.37, 11742.36, 11766.34, 11790.3, 11814.34, 11838.38, 11847.26, 11871.23, 11895.4, 11914.26, 11928.03, 11951.36, 11975.12, 11999.1, 12008, 12031.52, 12040.57, 12056.03, 12080.03, 12103.57, 12126.1, 12149.43, 12173.58, 12197.52, 12206.03, 12230.16, 12254.1, 12278.03, 12287.03, 12311.2, 12329.37, 12350.44, 12375.03, 12398.41, 12422.51, 12446.49, 12452.46, 12476.38, 12500.57, 12524.47, 12533.43, 12557.33], "g5": [11533.03, 11549.54, 11573.29, 11582.3, 11606.15, 11614.09, 11638.07, 11662.14, 11677.21, 11701.51, 11710.42, 11734.27, 11758.36, 11767.18, 11768.52, 11789.48, 11808.53, 11832.57, 11857.1, 11865.47, 11872.07, 11872.41, 11895.59, 11904.41, 11912.56, 11917.22, 11941.12, 11965.06, 11989.14, 11998.13, 12007.31, 12031.23, 12055.23, 12079.05, 12103.2, 12127.12, 12151.1, 12160.05, 12168.49, 12192.42, 12216.44, 12240.33, 12244.41, 12253.25, 12270.48, 12294.27, 12303.49, 12326.02, 12348.32, 12357.22, 12373.13, 12382.31, 12406.04, 12430.32], "g6": [4708.35, 4732.38, 4741.11, 4765.31, 4789.15, 4813.21, 4822.18, 4826.45, 4835.26, 4859.54, 4883.36, 4893.09, 4917.07, 4941.08, 4965.04, 4973.12, 4982.17, 4990.56, 5013.2, 5037.16, 5061.32, 5085.2, 5101.44, 5125.51, 5149.28, 5173.26, 5197.3, 5205.57, 5227.17, 5251.2, 5272.2, 5284.11, 5294.32, 5302.57, 5311.05, 5315.06, 5336.58, 5355.2, 5379.13, 5386.53, 5410.56, 5414.34, 5436.54, 5455.15, 5478.38, 5487.07, 5509.46, 5518.25, 5542.19, 5557.24, 5565.52, 5589.42, 5613.54, 5622.23]};
@@ -239,8 +248,10 @@ async function imp(){if(!S.db)return msg('No hay conexión para guardar.');
   await cf(x=>{x.activos.g1=x.activos.g5=x.activos.g6=true});msg('✔ Historial cargado: '+n+' lecturas')}catch(e){msg('Se cargaron '+n+' lecturas y luego falló. Avísame antes de repetir.')}}
 
 function localDB(){const K='cg_',rd=n=>{try{return JSON.parse(localStorage.getItem(K+n))}catch(e){return null}},wr=(n,v)=>{try{localStorage.setItem(K+n,JSON.stringify(v))}catch(e){}},subs={},emit=n=>(subs[n]||[]).forEach(f=>f()),on=(n,f)=>{(subs[n]=subs[n]||[]).push(f);f()};
- return{collection:n=>({add:async d=>{const a=rd(n)||[];a.push(d);wr(n,a);emit(n)},onSnapshot:f=>on(n,()=>f({docs:(rd(n)||[]).map(d=>({data:()=>d}))}))}),
- doc:n=>({set:async d=>{wr(n,d);emit(n)},onSnapshot:f=>on(n,()=>f({data:()=>rd(n)}))})}}
+ return{collection:n=>({add:async d=>{const a=rd(n)||[];a.push({...d,id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)});wr(n,a);emit(n)},
+ update:async(id,d)=>{const a=rd(n)||[],i=a.findIndex((x,j)=>(x.id||'i'+j)===id);if(i>=0){a[i]={...a[i],...d,id:a[i].id||id};wr(n,a);emit(n)}},
+ onSnapshot:f=>on(n,()=>f({docs:(rd(n)||[]).map((d,j)=>({id:d.id||'i'+j,data:()=>d}))}))}),
+ doc:n=>({set:async(d,m)=>{if(m){const a=rd(n)||{},o={...a};for(const k in d)o[k]=d[k]&&typeof d[k]==='object'&&!Array.isArray(d[k])?{...(a[k]||{}),...d[k]}:d[k];wr(n,o)}else wr(n,d);emit(n)},onSnapshot:f=>on(n,()=>f({data:()=>rd(n)}))})}}
 
 const sv=()=>S.mode==='nube'&&!navigator.onLine?' · se enviará cuando haya internet':'';
 const cfgOk=()=>{const C=window.FIREBASE_CONFIG;return !!(C&&C.apiKey&&C.projectId&&!/PEGAR/i.test(C.apiKey))};
@@ -254,8 +265,60 @@ async function fbDB(){if(!cfgOk())return null;
  const U='https://www.gstatic.com/firebasejs/10.14.1/',A=await import(U+'firebase-app.js'),F=await import(U+'firebase-firestore.js'),app=A.getApps().length?A.getApp():A.initializeApp(window.FIREBASE_CONFIG);
  let fs;try{fs=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(e){fs=F.getFirestore(app)}
  const pc=(n,k)=>{S.pend[n]=k;updSync()},er=e=>console.error('Firestore',e);
- return{collection:n=>{const col=F.collection(fs,'gen_'+n);return{add:async d=>{F.setDoc(F.doc(col),d).catch(er)},onSnapshot:(f,e)=>F.onSnapshot(col,{includeMetadataChanges:true},s=>{pc(n,s.docs.filter(x=>x.metadata.hasPendingWrites).length);f({docs:s.docs.map(x=>({data:()=>x.data()}))})},e||er)}},
-  doc:p=>{const [c,i]=p.split('/'),ref=F.doc(fs,'gen_'+c,i);return{set:async d=>{F.setDoc(ref,d).catch(er)},onSnapshot:(f,e)=>F.onSnapshot(ref,{includeMetadataChanges:true},s=>{pc('doc_'+c,s.metadata.hasPendingWrites?1:0);f({data:()=>s.data()||null})},e||er)}}}}
+ return{collection:n=>{const col=F.collection(fs,'gen_'+n);return{add:async d=>{F.setDoc(F.doc(col),d).catch(er)},update:async(id,d)=>{F.setDoc(F.doc(col,id),d,{merge:true}).catch(er)},onSnapshot:(f,e)=>F.onSnapshot(col,{includeMetadataChanges:true},s=>{pc(n,s.docs.filter(x=>x.metadata.hasPendingWrites).length);f({docs:s.docs.map(x=>({id:x.id,data:()=>x.data()}))})},e||er)}},
+  doc:p=>{const [c,i]=p.split('/'),ref=F.doc(fs,'gen_'+c,i);return{set:async(d,m)=>{(m?F.setDoc(ref,d,{merge:true}):F.setDoc(ref,d)).catch(er)},onSnapshot:(f,e)=>F.onSnapshot(ref,{includeMetadataChanges:true},s=>{pc('doc_'+c,s.metadata.hasPendingWrites?1:0);f({data:()=>s.data()||null})},e||er)}}}}
+
+function resp(){const b=new Blob([JSON.stringify({fecha:new Date().toISOString(),config:S.cfg,lecturas:S.lectAll||S.lect,mantenimientos:S.mantAll||S.mant,medidores:S.medAll||S.med},null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='respaldo_generadores_'+dk(Date.now())+'.json';document.body.appendChild(a);a.click();a.remove();msg('✔ Respaldo descargado')}
+
+// ===== Correcciones: editar o anular (nada se borra) =====
+const COL={lect:'lecturas',mant:'mantenimientos',med:'medidores'},TIPOS=[['lect','Lecturas de generadores'],['mant','Mantenimientos'],['med','Energía y diésel']];
+const clean=o=>JSON.parse(JSON.stringify(o)),findR=(t,id)=>(S[t+'All']||[]).find(x=>x.id===id);
+const hmOf=h=>{let a=Math.floor(h+1e-9),b=Math.round((h-a)*60);if(b===60){a++;b=0}return [a,b]};
+const tl=ts=>{const d=new Date(ts);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)};
+const qSel=cur=>`<select id="ed_q">${[...new Set([...cfg().quienes,cur].filter(Boolean))].map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+const desc=(t,x)=>t==='lect'?`${gn(x.gen)} · ${fh(x.h)}`:t==='mant'?`${gn(x.gen)} · ${esc((x.items||[]).join(', '))||'—'} · ${fh(x.h)}`:`${(MED.find(m=>m[0]===x.tipo)||[0,x.tipo])[1]} · ${x.v}`;
+const needQ=()=>{if(S.su&&Date.now()-S.suTs<9e5){S.suTs=Date.now();return false}S.su=false;msg('Solo el administrador puede corregir. Entra con tu PIN.');return true};
+const chk=(o,ts,v,k,f)=>{const pv=o.filter(r=>r.ts<ts).sort((a,b)=>b.ts-a.ts)[0],nx=o.filter(r=>r.ts>ts).sort((a,b)=>a.ts-b.ts)[0];return pv&&v<pv[k]?'Es menor que la lectura anterior ('+f(pv[k])+').':nx&&v>nx[k]?'Es mayor que la lectura siguiente ('+f(nx[k])+').':''};
+function vCor(){if(!S.su)return '';const t=S.ct||'lect',an=S.ca;
+ if(S.mode==='claude')return '<div class="c full"><h2>Correcciones</h2><p class="mu">Esta opción solo está en la versión de GitHub.</p></div>';
+ const rows=(S[t+'All']||[]).slice().sort((a,b)=>b.ts-a.ts).filter(x=>an||!x.anulado).slice(0,40).map(x=>`<div class="row" style="align-items:flex-start;${x.anulado?'opacity:.6':''}"><div><b>${fdy(x.ts)}</b>${x.anulado?' <span class="er">ANULADO</span>':''}${x.edit?' <span class="mu">(corregido)</span>':''}<div>${desc(t,x)}</div><div class="mu">Registró: ${x.quien?esc(x.quien):'sin registrar'}${x.anulado&&x.motivo?' · Motivo: '+esc(x.motivo):''}</div></div><div style="display:flex;gap:6px;flex-direction:column">${x.anulado?`<button class="chip" onclick="rest('${t}','${x.id}')">Restaurar</button>`:`<button class="chip" onclick="edit('${t}','${x.id}')">Editar</button><button class="chip" onclick="anul('${t}','${x.id}')">Anular</button>`}</div></div>`).join('')||'<p class="mu">No hay registros.</p>';
+ return `<div class="c full"><h2>Correcciones</h2><div class="mu">Corrige registros mal escritos. Nada se borra: lo anulado queda guardado y se puede restaurar. Quedan guardados el nombre de quien corrige y los valores de antes.</div><div class="chips">${TIPOS.map(([k,l])=>`<button class="chip ${k===t?'on':''}" onclick="S.ct='${k}';render()">${l}</button>`).join('')}</div><label class="mu"><input type="checkbox" style="width:auto" ${an?'checked':''} onchange="S.ca=this.checked;render()"> Mostrar anulados</label>${rows}<div class="mu" style="margin-top:8px">Se muestran los 40 más recientes.</div></div>`}
+function edit(t,id){if(needQ())return;const x=findR(t,id);if(!x)return;S.mod='ed';S.ed={t,id};let f='';
+ if(t!=='med'){const [h,m]=hmOf(x.h);f+=`<div class="mu">Generador</div><select id="ed_g">${GENS.map(g=>`<option value="${g[0]}" ${g[0]===x.gen?'selected':''}>${g[1]}</option>`).join('')}</select><div class="mu" style="margin-top:10px">Horómetro</div><div class="r"><input id="ed_h" type="number" inputmode="numeric" value="${h}"><b>h</b><input id="ed_m" type="number" inputmode="numeric" value="${m}"><b>m</b></div>`}
+ if(t==='mant'){const nm=[...new Set([...cfg().items,...(x.items||[])])];f+=`<div class="mu">Trabajos realizados</div><div class="chips">${nm.map(n=>`<button class="chip ${(x.items||[]).includes(n)?'on':''}" data-n="${esc(n)}" onclick="this.classList.toggle('on')">${esc(n)}</button>`).join('')}</div><input id="ed_nt" value="${esc(x.nota||'')}" placeholder="Nota (opcional)">`}
+ if(t==='med')f+=`<div class="mu">${(MED.find(m=>m[0]===x.tipo)||[0,x.tipo])[1]}</div><input id="ed_v" type="number" inputmode="decimal" step="any" value="${x.v}">`;
+ f+=`<div class="mu" style="margin-top:10px">Fecha y hora</div><input id="ed_t" type="datetime-local" value="${tl(x.ts)}"><div class="mu" style="margin-top:10px">Quién lo registró</div>${qSel(x.quien||'')}`;
+ $('#mod').innerHTML=`<div class="mo"><div class="c"><h2>Corregir registro</h2>${f}<div id="ed_e" class="er"></div><button class="b" onclick="saveEd()">Guardar corrección</button><button class="b s" style="margin-top:8px" onclick="cerrar()">Cancelar</button></div></div>`}
+async function saveEd(){if(!S.su){cerrar();return msg('Sesión de administrador vencida. Entra de nuevo.')}const {t,id}=S.ed,x=findR(t,id),E=m=>{$('#ed_e').textContent=m},ts=new Date($('#ed_t').value).getTime();
+ if(!ts)return E('Revisa la fecha y la hora.');
+ const p={ts,quien:$('#ed_q').value};let e='';
+ if(t!=='med'){const h=parseFloat($('#ed_h').value),m=parseFloat($('#ed_m').value||0);if(!(h>=0)||!(m>=0&&m<60))return E('Escribe las horas y los minutos (minutos de 0 a 59).');
+  const v=h+m/60,g=$('#ed_g').value;p.gen=g;p.h=v;if(t==='lect')e=chk(S.lect.filter(r=>r.gen===g&&r.id!==id),ts,v,'h',fh)}
+ if(t==='mant'){p.items=[...document.querySelectorAll('#mod .chip.on')].map(b=>b.dataset.n);p.nota=$('#ed_nt').value.trim();if(!p.items.length&&!p.nota)return E('Marca al menos un trabajo.')}
+ if(t==='med'){const v=parseFloat($('#ed_v').value);if(!(v>=0))return E('Revisa el número.');p.v=v;if(x.tipo!=='dcal')e=chk(S.med.filter(r=>r.tipo===x.tipo&&r.id!==id),ts,v,'v',n=>n)}
+ if(e)return E(e);
+ p.edit={por:S.quien||'Administrador',ts:Date.now(),antes:clean({ts:x.ts,quien:x.quien||'',gen:x.gen,h:x.h,items:x.items,nota:x.nota,v:x.v})};
+ try{await S.db.collection(COL[t]).update(id,clean(p));cerrar();msg('✔ Corrección guardada'+sv())}catch(err){E('No se pudo guardar. Intenta de nuevo.')}}
+function anul(t,id){if(needQ())return;const x=findR(t,id);if(!x)return;S.mod='ed';S.ed={t,id};
+ $('#mod').innerHTML=`<div class="mo"><div class="c"><h2>¿Anular este registro?</h2><p>${fdy(x.ts)}<br>${desc(t,x)}</p><div class="mu">No se borra: queda guardado como anulado y se puede restaurar.</div><input id="an_m" placeholder="Motivo (ej. lectura mal escrita)" style="margin:10px 0"><div id="ed_e" class="er"></div><button class="b" onclick="saveAn()">Sí, anular</button><button class="b s" style="margin-top:8px" onclick="cerrar()">Cancelar</button></div></div>`}
+async function saveAn(){if(!S.su){cerrar();return msg('Sesión de administrador vencida. Entra de nuevo.')}const {t,id}=S.ed;try{await S.db.collection(COL[t]).update(id,{anulado:true,anulado_por:S.quien||'Administrador',anulado_ts:Date.now(),motivo:$('#an_m').value.trim()});cerrar();msg('✔ Registro anulado'+sv())}catch(e){$('#ed_e').textContent='No se pudo guardar.'}}
+async function rest(t,id){if(needQ())return;try{await S.db.collection(COL[t]).update(id,{anulado:false,motivo:'',restaurado_por:S.quien||'Administrador',restaurado_ts:Date.now()});msg('✔ Registro restaurado'+sv())}catch(e){}}
+
+
+// ===== Administrador (super usuario) =====
+const updAdm=()=>{const el=$('#adm');if(el)el.textContent=S.su?'🔓 Administrador · Salir':'🔒 Administrador'};
+async function hashPin(p){const t='gen|'+p;try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){let h=5381;for(const c of t)h=((h<<5)+h+c.charCodeAt(0))>>>0;return 'x'+h}}
+function pinModal(mode){S.mod='adm';const nu=mode==='new'||!cfg().adminPin;
+ $('#mod').innerHTML=`<div class="mo"><div class="c"><h2>${nu?'Crear PIN de administrador':'Administrador'}</h2><div class="mu">${nu?'Elige un PIN de 4 a 6 números. Solo tú debes conocerlo.':'Escribe el PIN de administrador.'}</div><input id="pn1" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" style="margin:10px 0;font-size:24px;text-align:center">${nu?'<input id="pn2" type="password" inputmode="numeric" maxlength="6" placeholder="Repite el PIN" style="margin-bottom:10px;font-size:24px;text-align:center">':''}<div id="ed_e" class="er"></div><button class="b" onclick="pinOk(${nu})">${nu?'Guardar PIN':'Entrar'}</button><button class="b s" style="margin-top:8px" onclick="cerrar()">Cancelar</button></div></div>`;setTimeout(()=>{const i=$('#pn1');if(i)i.focus()},50)}
+async function pinOk(nu){const E=m=>{$('#ed_e').textContent=m},v=$('#pn1').value.trim();
+ if(S.pl&&Date.now()<S.pl)return E('Demasiados intentos. Espera 30 segundos.');
+ if(!/^\d{4,6}$/.test(v))return E('El PIN debe tener de 4 a 6 números.');
+ if(nu){if(v!==$('#pn2').value.trim())return E('Los dos PIN no coinciden.');if(S.mode==='nube'&&!S.cfgLoaded)return E('Espera un momento a que cargue la conexión.');const h=await hashPin(v);await cf(x=>{x.adminPin=h})}
+ else if(await hashPin(v)!==cfg().adminPin){S.pf=(S.pf||0)+1;if(S.pf>=5){S.pl=Date.now()+3e4;S.pf=0}return E('PIN incorrecto.')}
+ S.pf=0;S.su=true;S.suTs=Date.now();cerrar();msg(nu?'✔ PIN guardado. Ya eres administrador.':'✔ Administrador activo')}
+const admBtn=()=>{if(S.su){S.su=false;render();msg('Sesión de administrador cerrada.')}else pinModal()};
+document.addEventListener('pointerdown',()=>{if(S.su)S.suTs=Date.now()});
+setInterval(()=>{if(S.su&&Date.now()-S.suTs>9e5){S.su=false;render()}},30000);
 
 let pend=0;
 function up(){const a=document.activeElement;if(a&&a.tagName==='INPUT'&&!S.mod){pend=1;return}if(S.mod)return;render()}
@@ -268,10 +331,10 @@ document.addEventListener('focusout',()=>setTimeout(()=>{if(pend&&!(document.act
  S.fberr=!db&&cfgOk();
  if(!db){try{db=window.claude&&await claude.use('db');if(db)S.mode='claude'}catch(e){db=null}}
  S.local=!db;db=db||localDB();S.db=db;updSync();
- db.doc('config/main').onSnapshot(s=>{S.cfg=s.data()||{};up()},()=>{});
- db.collection('lecturas').onSnapshot(s=>{S.lect=s.docs.map(d=>d.data());up()},()=>{});
- db.collection('medidores').onSnapshot(s=>{S.med=s.docs.map(d=>d.data());up()},()=>{});
- db.collection('mantenimientos').onSnapshot(s=>{S.mant=s.docs.map(d=>d.data());up()},()=>{});
+ db.doc('config/main').onSnapshot(s=>{S.cfg=s.data()||{};S.cfgLoaded=1;up()},()=>{});
+ db.collection('lecturas').onSnapshot(s=>{S.lectAll=s.docs.map(d=>({...d.data(),id:d.id}));S.lect=S.lectAll.filter(x=>!x.anulado);up()},()=>{});
+ db.collection('medidores').onSnapshot(s=>{S.medAll=s.docs.map(d=>({...d.data(),id:d.id}));S.med=S.medAll.filter(x=>!x.anulado);up()},()=>{});
+ db.collection('mantenimientos').onSnapshot(s=>{S.mantAll=s.docs.map(d=>({...d.data(),id:d.id}));S.mant=S.mantAll.filter(x=>!x.anulado);up()},()=>{});
  render();
 })();
 </script></body></html>
